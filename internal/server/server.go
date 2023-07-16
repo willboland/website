@@ -1,19 +1,23 @@
 package server
 
 import (
-	"github.com/willboland/website/internal/cache"
+	"github.com/willboland/simcache"
 	"github.com/willboland/website/internal/message"
 	"net/http"
+	"time"
 )
 
 type Server struct {
 	Router       *http.ServeMux
-	messageCache *cache.DestructiveCache[[]message.Message]
+	messageCache *simcache.Cache[message.Message]
 }
 
-// NewServer returns a new Server with routes pre-configured.
+// NewServer returns a new Server with routes and dependencies pre-configured.
 func NewServer() *Server {
-	s := &Server{Router: http.NewServeMux()}
+	s := &Server{
+		Router:       http.NewServeMux(),
+		messageCache: simcache.New[message.Message](time.Hour * 24),
+	}
 	s.SetupRoutes()
 	return s
 }

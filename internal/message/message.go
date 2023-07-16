@@ -1,17 +1,21 @@
 package message
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 type Message struct {
 	Author    string    `json:"author"`
-	CreatedAt time.Time `json:"createdAt"`
 	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
+// New returns a Message with cleansed fields and CreatedAt as UTC.
 func New(author string, content string) Message {
 	return Message{
-		Author:    author,
-		CreatedAt: time.Now(),
-		Content:   content,
+		Author:    strings.TrimSpace(author),
+		Content:   strings.TrimSpace(content),
+		CreatedAt: time.Now().UTC(),
 	}
 }
