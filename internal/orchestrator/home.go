@@ -1,52 +1,57 @@
 package orchestrator
 
 import (
+	"bytes"
 	"encoding/json"
-	"github.com/willboland/website/internal/cache"
+	"github.com/willboland/simcache"
 	"github.com/willboland/website/internal/message"
 	"net/http"
+	"strings"
+	"time"
 )
 
-func HomeGet(messages []message.Message) Response {
+func HomeGet(messages []message.Message) (int, []byte) {
 	if len(messages) == 0 {
-		return Response{
-			code: http.StatusOK,
-			body: []byte(`No messages yet :/`),
-		}
+		return http.StatusNoContent, []byte(`No messages yet :/`)
 	}
 
-	messagesJSON, err := json.MarshalIndent(messages, "", "\t")
-	if err != nil {
-		return Response{
-			code: http.StatusInternalServerError,
-			body: []byte(`Something went wrong :(`),
-		}
+	var builder strings.Builder
+	for _, m := range messages {
+		builder.WriteString(m.Author + " on " + m.CreatedAt.Format(time.DateTime) + " wrote: ")
+		builder.WriteString(m.Content + "\n\n")
 	}
 
-	return Response{
-		code: http.StatusOK,
-		body: messagesJSON,
-	}
+	body := bytes.NewBufferString(builder.String()).Bytes()
+	return http.StatusOK, body
 }
 
-func HomePost(r *http.Request, cache *cache.DestructiveCache[[]message.Message]) Response {
+func HomePost(r *http.Request, cache *simcache.Cache[message.Message]) (int, []byte) {
+	type request struct {
+		Author  string
+		Message string
+	}
+
+	type response struct {
+		Error string `json:"error,omitempty"`
+	}
+
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 
-	var m message.Message
-	err := decoder.Decode(&m)
+	var requestBody request
+	err := decoder.Decode(&requestBody)
 	if err != nil {
-		return Response{
-			code: http.StatusBadRequest,
-			body: []byte(`{"error":"invalid request"}`),
-		}
+		b, _ := json.Marshal(response{Error: err.Error()})
+		return http.StatusBadRequest, b
 	}
 
-	formattedMessage := message.New(m.Author, m.Content)
-	messages, _ := cache.Get(m.Author)
-	messages = append(messages, formattedMessage)
-	cache.Set(formattedMessage.Author, messages)
-	return Response{
-		code: http.StatusCreated,
+	formattedMessage := message.New(requestBody.Author, requestBody.Message)
+	key := formattedMessage.Author + time.Now().Format(time.StampNano)
+	added := cache.Add(key, formattedMessage)
+	if !added {
+		b, _ := json.Marshal(response{Error: "duplicate request occurred at same time, try again"})
+		return http.StatusConflict, b
 	}
+
+	return http.StatusCreated, nil
 }

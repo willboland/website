@@ -1,30 +1,24 @@
 package server
 
 import (
-	"github.com/willboland/website/internal/cache"
-	"github.com/willboland/website/internal/message"
 	"github.com/willboland/website/internal/orchestrator"
 	"net/http"
-	"time"
 )
 
 func (s *Server) Home(w http.ResponseWriter, r *http.Request) {
-	if s.messageCache == nil {
-		s.messageCache = cache.NewDestructiveCache[[]message.Message](24 * time.Hour)
-		go s.messageCache.EnqueueDestruction()
-	}
-
-	var messages []message.Message
-	for _, authorsMessages := range s.messageCache.Values() {
-		messages = append(messages, authorsMessages...)
-	}
+	var code int
+	var body []byte
 
 	switch r.Method {
 	case http.MethodGet:
-		orchestrator.HomeGet(messages).Write(w)
+		code, body = orchestrator.HomeGet(s.messageCache.Values())
 	case http.MethodPost:
-		orchestrator.HomePost(r, s.messageCache).Write(w)
+		code, body = orchestrator.HomePost(r, s.messageCache)
 	default:
 		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+		return
 	}
+
+	w.WriteHeader(code)
+	_, _ = w.Write(body)
 }
